@@ -8,6 +8,7 @@ mod cluster;
 mod generation;
 mod geometry;
 mod lod;
+mod modules;
 mod source;
 
 pub use generation::Species;
@@ -16,3 +17,5 @@ pub use lod::ScreenLod;
 
 pub use cluster::FoliageCluster;
 pub use source::{FoliageCard, SourceFit, SourceSurface};
+
+pub use modules::{Module, ModuleTier};
