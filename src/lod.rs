@@ -8,31 +8,31 @@ use crate::geometry::{
 /// plant. Compute the diameter from the camera's focal length and depth.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ScreenLod {
-    pub projected_diameter_px: f32,
+    pub projected_diameter: f32,
     /// Maximum permitted radial chord error on visible woody stems.
-    pub stem_error_px: f32,
+    pub stem_chord_error: f32,
     /// Aggregate foliage recursively until a group's bounds exceed this size.
-    pub foliage_patch_px: f32,
+    pub foliage_patch_diameter: f32,
 }
 
 impl ScreenLod {
     /// # Errors
     /// Every parameter must be positive and finite.
     pub fn new(
-        projected_diameter_px: f32,
-        stem_error_px: f32,
-        foliage_patch_px: f32,
+        projected_diameter: f32,
+        stem_chord_error: f32,
+        foliage_patch_diameter: f32,
     ) -> Result<Self> {
-        if ![projected_diameter_px, stem_error_px, foliage_patch_px]
+        if ![projected_diameter, stem_chord_error, foliage_patch_diameter]
             .into_iter()
             .all(|v| v.is_finite() && v > 0.0)
         {
             return Err(Error::Invalid("screen-space LOD parameters"));
         }
         Ok(Self {
-            projected_diameter_px,
-            stem_error_px,
-            foliage_patch_px,
+            projected_diameter,
+            stem_chord_error,
+            foliage_patch_diameter,
         })
     }
 }
@@ -93,9 +93,9 @@ impl Plant {
         // Public fields allow callers to construct ScreenLod directly: validate
         // here as well, rather than relying on the optional constructor.
         ScreenLod::new(
-            target.projected_diameter_px,
-            target.stem_error_px,
-            target.foliage_patch_px,
+            target.projected_diameter,
+            target.stem_chord_error,
+            target.foliage_patch_diameter,
         )?;
         if !wood_color[..3].iter().all(|c| c.is_finite() && *c >= 0.0)
             || !wood_color[3].is_finite()
@@ -103,7 +103,7 @@ impl Plant {
         {
             return Err(Error::Invalid("wood material color"));
         }
-        let scale = target.projected_diameter_px / self.bounds().diameter();
+        let scale = target.projected_diameter / self.bounds().diameter();
         if !scale.is_finite() || scale <= 0.0 {
             return Err(Error::Invalid("unrepresentable projected scale"));
         }
@@ -139,8 +139,8 @@ impl Plant {
         };
         for stem in stems {
             let projected_radius = stem.base_radius.max(stem.tip_radius) * scale;
-            if projected_radius >= target.stem_error_px || stem.parent.is_none() {
-                let sides = radial_sides(projected_radius, target.stem_error_px)?;
+            if projected_radius >= target.stem_chord_error || stem.parent.is_none() {
+                let sides = radial_sides(projected_radius, target.stem_chord_error)?;
                 cylinder(&mut mesh, stem, sides, wood_color)?;
             }
         }
@@ -162,7 +162,7 @@ impl Plant {
             let Some(aggregate) = aggregates[index] else {
                 continue;
             };
-            if aggregate.bounds.diameter() * scale <= target.foliage_patch_px
+            if aggregate.bounds.diameter() * scale <= target.foliage_patch_diameter
                 || children[index].is_empty()
             {
                 canopy_octahedron(&mut mesh, aggregate.bounds, aggregate.color())?;
@@ -328,19 +328,19 @@ mod tests {
     use crate::{Foliage, Species, Stem};
 
     #[test]
-    fn detail_rises_with_projected_crown_and_bounds_remain_constant() {
+    fn detail_rises_with_projected_crown_and_bounds_remain_constant() -> Result<()> {
         let species = Species::default();
-        let tree = Plant::generate(&species, 7347).unwrap();
+        let tree = Plant::generate(&species, 7347)?;
         let mut previous = 0;
         for diameter in [4.0, 8.0, 16.0, 32.0, 80.0, 200.0, 600.0] {
-            let lod = ScreenLod::new(diameter, 0.75, 12.0).unwrap();
-            let mesh = tree.mesh(lod, species.wood_color).unwrap();
+            let lod = ScreenLod::new(diameter, 0.75, 12.0)?;
+            let mesh = tree.mesh(lod, species.wood_color)?;
             assert_eq!(mesh.source_bounds, tree.bounds());
             assert!(mesh.triangle_count() >= previous);
             assert!(
                 mesh.indices
                     .iter()
-                    .all(|i| usize::try_from(*i).unwrap() < mesh.vertices.len())
+                    .all(|i| usize::try_from(*i).is_ok_and(|i| i < mesh.vertices.len()))
             );
             assert!(
                 mesh.vertices
@@ -349,10 +349,11 @@ mod tests {
             );
             previous = mesh.triangle_count();
         }
+        Ok(())
     }
 
     #[test]
-    fn mesh_repeated_and_all_foliage_covered() {
+    fn mesh_repeated_and_all_foliage_covered() -> Result<()> {
         let source = Plant::from_parts(
             vec![
                 Stem {
@@ -391,64 +392,45 @@ mod tests {
                     stem: 2,
                 },
             ],
-        )
-        .unwrap();
-        let far = source
-            .mesh(
-                ScreenLod::new(4.0, 0.75, 12.0).unwrap(),
-                [0.3, 0.2, 0.1, 1.0],
-            )
-            .unwrap();
-        let near = source
-            .mesh(
-                ScreenLod::new(200.0, 0.75, 12.0).unwrap(),
-                [0.3, 0.2, 0.1, 1.0],
-            )
-            .unwrap();
+        )?;
+        let far = source.mesh(ScreenLod::new(4.0, 0.75, 12.0)?, [0.3, 0.2, 0.1, 1.0])?;
+        let near = source.mesh(ScreenLod::new(200.0, 0.75, 12.0)?, [0.3, 0.2, 0.1, 1.0])?;
         assert_eq!(
             far.indices,
             source
-                .mesh(
-                    ScreenLod::new(4.0, 0.75, 12.0).unwrap(),
-                    [0.3, 0.2, 0.1, 1.0]
-                )
-                .unwrap()
+                .mesh(ScreenLod::new(4.0, 0.75, 12.0)?, [0.3, 0.2, 0.1, 1.0])?
                 .indices
         );
         assert!(far.triangle_count() < near.triangle_count());
         // The aggregate covers both extremal canopy lobes, not just the root tip.
         assert!(far.vertices.iter().any(|v| v.position[0] >= 3.0));
         assert!(far.vertices.iter().any(|v| v.position[0] <= -3.0));
+        Ok(())
     }
 
     #[test]
-    fn finite_and_valid_inputs_are_enforced_at_api_boundaries() {
-        let tree = Plant::generate(&Species::default(), 0).unwrap();
+    fn finite_and_valid_inputs_are_enforced_at_api_boundaries() -> Result<()> {
+        let tree = Plant::generate(&Species::default(), 0)?;
         assert!(ScreenLod::new(0.0, 1.0, 2.0).is_err());
         assert!(
             tree.mesh(
                 ScreenLod {
-                    projected_diameter_px: f32::INFINITY,
-                    stem_error_px: 1.0,
-                    foliage_patch_px: 10.0
+                    projected_diameter: f32::INFINITY,
+                    stem_chord_error: 1.0,
+                    foliage_patch_diameter: 10.0
                 },
                 [1.0; 4]
             )
             .is_err()
         );
         assert!(
-            tree.mesh(
-                ScreenLod::new(20.0, 1.0, 12.0).unwrap(),
-                [1.0, -1.0, 1.0, 1.0]
-            )
-            .is_err()
+            tree.mesh(ScreenLod::new(20.0, 1.0, 12.0)?, [1.0, -1.0, 1.0, 1.0])
+                .is_err()
         );
         assert!(
-            tree.mesh(
-                ScreenLod::new(20.0, f32::MIN_POSITIVE, 12.0).unwrap(),
-                [1.0; 4]
-            )
-            .is_err()
+            tree.mesh(ScreenLod::new(20.0, f32::MIN_POSITIVE, 12.0)?, [1.0; 4])
+                .is_err()
         );
+        Ok(())
     }
 }

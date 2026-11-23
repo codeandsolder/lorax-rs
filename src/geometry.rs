@@ -48,12 +48,12 @@ pub struct Bounds {
 }
 
 impl Bounds {
-    #[must_use]
+    #[must_use = "Use the calculated plant value"]
     pub fn center(self) -> [f32; 3] {
         std::array::from_fn(|axis| 0.5_f32.mul_add(self.max[axis], 0.5 * self.min[axis]))
     }
 
-    #[must_use]
+    #[must_use = "Use the calculated plant value"]
     pub fn radius(self) -> f32 {
         let center = self.center();
         let half = std::array::from_fn::<_, 3, _>(|axis| {
@@ -62,7 +62,7 @@ impl Bounds {
         half.into_iter().map(|x| x * x).sum::<f32>().sqrt()
     }
 
-    #[must_use]
+    #[must_use = "Use the calculated plant value"]
     pub fn diameter(self) -> f32 {
         self.radius() * 2.0
     }
@@ -74,7 +74,7 @@ impl Bounds {
         }
     }
 
-    #[must_use]
+    #[must_use = "Use the calculated plant value"]
     pub fn around(center: [f32; 3], radii: [f32; 3]) -> Self {
         Self {
             min: std::array::from_fn(|axis| center[axis] - radii[axis]),
@@ -82,7 +82,7 @@ impl Bounds {
         }
     }
 
-    #[must_use]
+    #[must_use = "Use the calculated plant value"]
     pub fn valid(self) -> bool {
         self.min
             .iter()
@@ -161,17 +161,17 @@ impl Plant {
         })
     }
 
-    #[must_use]
+    #[must_use = "Use the calculated plant value"]
     pub fn stems(&self) -> &[Stem] {
         &self.stems
     }
 
-    #[must_use]
+    #[must_use = "Use the calculated plant value"]
     pub fn foliage(&self) -> &[Foliage] {
         &self.foliage
     }
 
-    #[must_use]
+    #[must_use = "Use the calculated plant value"]
     pub const fn bounds(&self) -> Bounds {
         self.bounds
     }
@@ -205,7 +205,7 @@ pub struct Mesh {
 }
 
 impl Mesh {
-    #[must_use]
+    #[must_use = "Use the calculated plant value"]
     pub const fn triangle_count(&self) -> usize {
         self.indices.len() / 3
     }

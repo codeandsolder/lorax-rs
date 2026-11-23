@@ -199,29 +199,31 @@ mod tests {
     use super::*;
 
     #[test]
-    fn repeatable_across_multiple_meshing_requests() {
+    fn repeatable_across_multiple_meshing_requests() -> Result<()> {
         let species = Species::default();
-        let one = Plant::generate(&species, 123_456).unwrap();
-        let two = Plant::generate(&species, 123_456).unwrap();
+        let one = Plant::generate(&species, 123_456)?;
+        let two = Plant::generate(&species, 123_456)?;
         assert_eq!(one, two);
-        assert_ne!(one, Plant::generate(&species, 123_457).unwrap());
+        assert_ne!(one, Plant::generate(&species, 123_457)?);
         assert_eq!(one.stems().len(), 85);
         assert_eq!(one.foliage().len(), 64);
+        Ok(())
     }
 
     #[test]
-    fn branches_are_ordered_and_degenerate_inputs_are_rejected() {
+    fn branches_are_ordered_and_degenerate_inputs_are_rejected() -> Result<()> {
         let mut species = Species {
             levels: 0,
             ..Species::default()
         };
-        let trunk = Plant::generate(&species, 0).unwrap();
+        let trunk = Plant::generate(&species, 0)?;
         assert_eq!(trunk.stems().len(), 1);
         assert_eq!(trunk.foliage().len(), 1);
         species.levels = u8::MAX;
-        assert_eq!(Plant::generate(&species, 0).unwrap_err(), Error::TooLarge);
+        assert_eq!(Plant::generate(&species, 0).err(), Some(Error::TooLarge));
         species.levels = 2;
         species.length_decay = f32::NAN;
         assert!(Plant::generate(&species, 0).is_err());
+        Ok(())
     }
 }
