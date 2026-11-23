@@ -1,0 +1,15 @@
+[package]
+name = "lorax-rs"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.100"
+description = "Deterministic procedural vegetation with projected-error geometric LOD"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/codeandsolder/lorax-rs"
+readme = "README.md"
+keywords = ["procedural", "foliage", "lod", "graphics", "vegetation"]
+categories = ["game-development", "graphics", "rendering"]
+exclude = ["docs/*"]
+
+[lints.rust]
+unsafe_code = "forbid"
