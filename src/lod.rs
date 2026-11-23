@@ -13,6 +13,8 @@ pub struct ScreenLod {
     pub stem_chord_error: f32,
     /// Aggregate foliage recursively until a group's bounds exceed this size.
     pub foliage_patch_diameter: f32,
+    /// Upper limit on separate spatial foliage proxies for one plant.
+    pub max_clusters: usize,
 }
 
 impl ScreenLod {
@@ -33,51 +35,19 @@ impl ScreenLod {
             projected_diameter,
             stem_chord_error,
             foliage_patch_diameter,
+            max_clusters: 32,
         })
     }
-}
-
-#[derive(Clone, Copy)]
-struct Aggregate {
-    bounds: Bounds,
-    sum_color: [f64; 4],
-    leaf_count: usize,
-}
-
-impl Aggregate {
-    fn new(leaf: &crate::Foliage) -> Self {
-        Self {
-            bounds: Bounds::around(leaf.center, leaf.radii),
-            sum_color: leaf.color.map(f64::from),
-            leaf_count: 1,
+    /// Limit independent foliage aggregates without losing any source cards.
+    ///
+    /// # Errors
+    /// Rejects a zero cluster budget.
+    pub const fn with_cluster_budget(mut self, maximum: usize) -> Result<Self> {
+        if maximum == 0 {
+            return Err(Error::Invalid("zero foliage cluster budget"));
         }
-    }
-
-    fn absorb(&mut self, other: Self) {
-        self.bounds.union(other.bounds);
-        for (channel, value) in self.sum_color.iter_mut().zip(other.sum_color) {
-            *channel += value;
-        }
-        self.leaf_count += other.leaf_count;
-    }
-
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "counts are bounded to u32-sized source arrays"
-    )]
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "the f64 average lies in the original f32 input range"
-    )]
-    fn color(self) -> [f32; 4] {
-        self.sum_color.map(|c| (c / self.leaf_count as f64) as f32)
-    }
-}
-
-fn absorb(slot: &mut Option<Aggregate>, child: Aggregate) {
-    match slot {
-        Some(existing) => existing.absorb(child),
-        None => *slot = Some(child),
+        self.max_clusters = maximum;
+        Ok(self)
     }
 }
 
@@ -97,45 +67,26 @@ impl Plant {
             target.stem_chord_error,
             target.foliage_patch_diameter,
         )?;
+        if target.max_clusters == 0 {
+            return Err(Error::Invalid("zero foliage cluster budget"));
+        }
         if !wood_color[..3].iter().all(|c| c.is_finite() && *c >= 0.0)
             || !wood_color[3].is_finite()
             || !(0.0..=1.0).contains(&wood_color[3])
         {
             return Err(Error::Invalid("wood material color"));
         }
-        let scale = target.projected_diameter / self.bounds().diameter();
+        let scale = target.projected_diameter / self.source_frame().diameter();
         if !scale.is_finite() || scale <= 0.0 {
             return Err(Error::Invalid("unrepresentable projected scale"));
         }
 
         let stems = self.stems();
-        let mut children = vec![Vec::new(); stems.len()];
-        let mut aggregates = vec![None; stems.len()];
-        for (index, stem) in stems.iter().enumerate() {
-            if let Some(parent) = stem.parent {
-                children[usize::try_from(parent).map_err(|_| Error::TooLarge)?].push(index);
-            }
-        }
-        for leaf in self.foliage() {
-            absorb(
-                &mut aggregates[usize::try_from(leaf.stem).map_err(|_| Error::TooLarge)?],
-                Aggregate::new(leaf),
-            );
-        }
-        // Parent indices strictly precede children. A reverse sweep merges
-        // all descendant foliage bounds/colors in O(stems + foliage) time.
-        for index in (0..stems.len()).rev() {
-            if let (Some(parent), Some(aggregate)) = (stems[index].parent, aggregates[index]) {
-                absorb(
-                    &mut aggregates[usize::try_from(parent).map_err(|_| Error::TooLarge)?],
-                    aggregate,
-                );
-            }
-        }
         let mut mesh = Mesh {
             vertices: Vec::new(),
             indices: Vec::new(),
             source_bounds: self.bounds(),
+            source_frame: self.source_frame(),
         };
         for stem in stems {
             let projected_radius = stem.base_radius.max(stem.tip_radius) * scale;
@@ -145,38 +96,10 @@ impl Plant {
             }
         }
 
-        // The same source hierarchy produces stable aggregates for every LOD.
-        // A coarse group is represented once, while fine views descend to
-        // child subgroups; each original foliage element appears exactly once.
-        let mut stack = Vec::new();
-        for (index, stem) in stems.iter().enumerate() {
-            if stem.parent.is_none() {
-                stack.push(index);
-            }
-        }
-        let mut attached = vec![Vec::new(); stems.len()];
-        for (index, leaf) in self.foliage().iter().enumerate() {
-            attached[usize::try_from(leaf.stem).map_err(|_| Error::TooLarge)?].push(index);
-        }
-        while let Some(index) = stack.pop() {
-            let Some(aggregate) = aggregates[index] else {
-                continue;
-            };
-            if aggregate.bounds.diameter() * scale <= target.foliage_patch_diameter
-                || children[index].is_empty()
-            {
-                canopy_octahedron(&mut mesh, aggregate.bounds, aggregate.color())?;
-            } else {
-                for &leaf_index in &attached[index] {
-                    let leaf = self.foliage()[leaf_index];
-                    canopy_octahedron(
-                        &mut mesh,
-                        Bounds::around(leaf.center, leaf.radii),
-                        leaf.color,
-                    )?;
-                }
-                stack.extend(children[index].iter().copied());
-            }
+        // All foliage follows one deterministic spatial hierarchy, not the
+        // branch attachment graph (which may contain a single giant root).
+        for cluster in self.foliage_clusters(target)? {
+            canopy_octahedron(&mut mesh, cluster.bounds, cluster.color)?;
         }
         if mesh.vertices.iter().any(|v| {
             !v.position.into_iter().all(f32::is_finite) || !v.normal.into_iter().all(f32::is_finite)
@@ -417,7 +340,8 @@ mod tests {
                 ScreenLod {
                     projected_diameter: f32::INFINITY,
                     stem_chord_error: 1.0,
-                    foliage_patch_diameter: 10.0
+                    foliage_patch_diameter: 10.0,
+                    max_clusters: 32
                 },
                 [1.0; 4]
             )
