@@ -90,7 +90,7 @@ impl Plant {
         };
         for stem in stems {
             let projected_radius = stem.base_radius.max(stem.tip_radius) * scale;
-            if projected_radius >= target.stem_chord_error || stem.parent.is_none() {
+            if crate::modules::select_stem(stem, scale, target.stem_chord_error) {
                 let sides = radial_sides(projected_radius, target.stem_chord_error)?;
                 cylinder(&mut mesh, stem, sides, wood_color)?;
             }
