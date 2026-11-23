@@ -45,8 +45,11 @@ fn split_axis(plant: &Plant, ids: &[usize]) -> usize {
 
 #[expect(
     clippy::cast_possible_truncation,
+    reason = "the source-color f64 average lies within the f32 source color range"
+)]
+#[expect(
     clippy::cast_precision_loss,
-    reason = "an average of finite source f32 colors remains in the input f32 range"
+    reason = "the number of cards is bounded by addressable u32 indices"
 )]
 fn average_color(plant: &Plant, ids: &[usize]) -> [f32; 4] {
     let mut sum = [0.0_f64; 4];
