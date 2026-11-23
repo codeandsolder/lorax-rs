@@ -93,6 +93,36 @@ impl Bounds {
     }
 }
 
+/// The authored normalization frame is independent of the loose AABB.
+///
+/// The same camera-derived projected diameter must correspond to the source
+/// sphere even if a fitted approximation extends slightly beyond it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SourceFrame {
+    pub center: [f32; 3],
+    pub radius: f32,
+}
+
+impl SourceFrame {
+    /// # Errors
+    /// Rejects invalid center coordinates and degenerate/non-finite radius.
+    pub fn new(center: [f32; 3], radius: f32) -> Result<Self> {
+        if !valid3(center)
+            || !radius.is_finite()
+            || radius <= 0.0
+            || !radius.mul_add(2.0, 0.0).is_finite()
+        {
+            return Err(Error::Invalid("source normalization frame"));
+        }
+        Ok(Self { center, radius })
+    }
+
+    #[must_use = "Use the model-space normalization diameter"]
+    pub fn diameter(self) -> f32 {
+        self.radius * 2.0
+    }
+}
+
 /// A local-space branch graph with terminal foliage and a fixed source envelope.
 ///
 /// The graph may come from procedural rules or an authored asset fitted to stems.
@@ -102,6 +132,7 @@ pub struct Plant {
     stems: Vec<Stem>,
     foliage: Vec<Foliage>,
     bounds: Bounds,
+    frame: SourceFrame,
 }
 
 impl Plant {
@@ -158,10 +189,55 @@ impl Plant {
             stems,
             foliage,
             bounds,
+            frame: SourceFrame::new(bounds.center(), bounds.radius())?,
         })
     }
 
-    #[must_use = "Use the calculated plant value"]
+    /// Override the authored normalization sphere without changing geometry.
+    ///
+    /// Fitted proxies may protrude slightly beyond the source art; culling
+    /// must use `required_culling_radius`, not assume this radius is conservative.
+    ///
+    /// # Errors
+    /// Rejects invalid model-space frames.
+    pub fn with_source_frame(mut self, frame: SourceFrame) -> Result<Self> {
+        self.frame = SourceFrame::new(frame.center, frame.radius)?;
+        Ok(self)
+    }
+
+    #[must_use = "Use a single normalization frame for every LOD"]
+    pub const fn source_frame(&self) -> SourceFrame {
+        self.frame
+    }
+
+    /// Conservative source-space culling radius for the fitted geometry.
+    /// It is deliberately distinct from the original authored normalization
+    /// radius, so a coarse branch cylinder cannot corrupt instance scales.
+    #[must_use = "Apply this bound when culling generated procedural meshes"]
+    pub fn required_culling_radius(&self) -> f32 {
+        let center = self.frame.center;
+        let mut radius = self.frame.radius;
+        for stem in &self.stems {
+            let thickness = stem.base_radius.max(stem.tip_radius);
+            for endpoint in [stem.start, stem.end] {
+                radius = radius
+                    .max(dot(sub(endpoint, center), sub(endpoint, center)).sqrt() + thickness);
+            }
+        }
+        for leaf in &self.foliage {
+            let displacement = sub(leaf.center, center);
+            for axis in 0..3 {
+                for direction in [-1.0_f32, 1.0_f32] {
+                    let mut vertex = displacement;
+                    vertex[axis] = direction.mul_add(leaf.radii[axis], vertex[axis]);
+                    radius = radius.max(dot(vertex, vertex).sqrt());
+                }
+            }
+        }
+        radius
+    }
+
+    #[must_use = "Use the source stems"]
     pub fn stems(&self) -> &[Stem] {
         &self.stems
     }
@@ -202,6 +278,7 @@ pub struct Mesh {
     pub indices: Vec<u32>,
     /// Original plant-space bounds, identical across every LOD.
     pub source_bounds: Bounds,
+    pub source_frame: SourceFrame,
 }
 
 impl Mesh {

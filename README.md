@@ -26,3 +26,19 @@ See docs/architecture.md for the LOD and stability contract.
 
 Dual-licensed under MIT or Apache-2.0, at your option. See LICENSE-MIT and
 LICENSE-APACHE.
+
+## Source-fitted tree LOD
+
+Original models can be fitted without importing an engine-specific parser:
+pass transformed material-specific XYZ positions and triangle indices in
+SourceSurface slices. SourceFit::fit recovers connected woody segments and
+every original foliage card, including its exact material and triangle indices.
+Provide the source normalization center/radius as SourceFrame when available.
+Plant.required_culling_radius() provides the separate conservative bound for
+the fitted proxy geometry.
+
+The same Plant can return spatially clustered foliage for multiple projected
+sizes via foliage_clusters(ScreenLod). Clusters have a hard configurable
+budget and stable original-card indices suitable for directional source-texture
+impostor baking; octahedral meshes are diagnostic solid-color proxies, not
+texture-preserving final art. See docs/source-fitting.md.
