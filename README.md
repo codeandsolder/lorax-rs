@@ -21,3 +21,8 @@ Parallax OakTree skeleton or preserve its authored leaf textures; the existing
 source assets remain the visual reference until that validation is completed.
 
 See docs/architecture.md for the LOD and stability contract.
+
+## Licensing
+
+Dual-licensed under MIT or Apache-2.0, at your option. See LICENSE-MIT and
+LICENSE-APACHE.
