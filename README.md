@@ -42,3 +42,13 @@ sizes via foliage_clusters(ScreenLod). Clusters have a hard configurable
 budget and stable original-card indices suitable for directional source-texture
 impostor baking; octahedral meshes are diagnostic solid-color proxies, not
 texture-preserving final art. See docs/source-fitting.md.
+
+## Continuous integration
+
+Every pull request, default-branch push and merge-group candidate runs the
+fleet-pinned strict Rust source, formatting and Clippy policy, the duplicate-code
+regression gate, and the complete Cargo test suite (including doctests) through
+shared CI with mandatory sccache. The pinned toolchain is in
+`rust-toolchain.toml`; production code is held to the strict lint policy while
+ordinary test assertions are permitted. The shared Rust gate enforces the
+72-hour release-age quarantine for newly introduced external registry crates.
