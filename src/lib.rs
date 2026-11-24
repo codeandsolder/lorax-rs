@@ -4,6 +4,7 @@
 //! an approximation of that hierarchy; it never changes the plant's identity.
 //! Lod meshes retain the same model-space origin and conservative source bounds.
 
+mod broadleaf;
 mod cluster;
 mod conifer;
 mod generation;
@@ -12,6 +13,7 @@ mod lod;
 mod modules;
 mod source;
 
+pub use broadleaf::Broadleaf;
 pub use conifer::WhorledConifer;
 pub use generation::Species;
 pub use geometry::{Bounds, Error, Foliage, Mesh, Plant, SourceFrame, Stem, Vertex};
