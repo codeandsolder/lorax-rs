@@ -52,3 +52,10 @@ shared CI with mandatory sccache. The pinned toolchain is in
 `rust-toolchain.toml`; production code is held to the strict lint policy while
 ordinary test assertions are permitted. The shared Rust gate enforces the
 72-hour release-age quarantine for newly introduced external registry crates.
+
+For excurrent trees, `WhorledConifer` generates a single central leader
+with successively shorter radial branch whorls and overlapping needle-cluster
+envelopes. Its independent parameters describe crown base, taper, whorl
+count and branch elevation rather than reusing broadleaf branching depth.
+The result is an ordinary immutable `Plant` and uses the same nested
+module and mesh LOD algorithms, source identity and physical bounds.

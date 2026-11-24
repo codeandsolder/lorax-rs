@@ -5,12 +5,14 @@
 //! Lod meshes retain the same model-space origin and conservative source bounds.
 
 mod cluster;
+mod conifer;
 mod generation;
 mod geometry;
 mod lod;
 mod modules;
 mod source;
 
+pub use conifer::WhorledConifer;
 pub use generation::Species;
 pub use geometry::{Bounds, Error, Foliage, Mesh, Plant, SourceFrame, Stem, Vertex};
 pub use lod::ScreenLod;
