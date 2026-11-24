@@ -74,13 +74,13 @@ impl Species {
     }
 }
 
-fn valid_color(v: [f32; 4]) -> bool {
+pub fn valid_color(v: [f32; 4]) -> bool {
     v[..3].iter().all(|x| x.is_finite() && *x >= 0.0)
         && v[3].is_finite()
         && (0.0..=1.0).contains(&v[3])
 }
 
-struct Random(u64);
+pub struct Random(pub u64);
 
 impl Random {
     const fn next(&mut self) -> u64 {
@@ -96,7 +96,7 @@ impl Random {
         clippy::cast_precision_loss,
         reason = "masked integer is at most 24 bits"
     )]
-    fn unit(&mut self) -> f32 {
+    pub fn unit(&mut self) -> f32 {
         (self.next() >> 40) as f32 * (1.0 / 16_777_216.0)
     }
 }
