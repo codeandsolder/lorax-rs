@@ -15,13 +15,13 @@ permissions:
 
 jobs:
   strict-rust:
-    uses: codeandsolder/rust-skills2/.github/workflows/strict-rust.yml@7d0552029497cf094787c3593f804d5bce137c4b # main
+    uses: codeandsolder/rust-skills2/.github/workflows/strict-rust.yml@7cd4c792bd6aba2807b4accc42dfb3e9db238634 # main
     with:
       cargo-args: "--locked --workspace --all-targets --all-features"
       ban-python-outside-ci: true
       allow-test-panics: true # tests use ordinary assertion and Result unwrap ergonomics
   tests:
-    uses: codeandsolder/ci-workflows/.github/workflows/rust-sccache.yml@83ceff49d93d152cd95a1c9d6addb5cf03169477 # main
+    uses: codeandsolder/ci-workflows/.github/workflows/rust-sccache.yml@2e8ed8421d595fbb99f6adef510a84411dbe4078 # main
     with:
       command: |
         cargo test --locked --workspace --all-features --all-targets
